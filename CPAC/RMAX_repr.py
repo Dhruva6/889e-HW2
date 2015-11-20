@@ -43,6 +43,16 @@ class RMAX_repr(Representation):
 
     def pre_discover(self, s, terminal, a, sn, terminaln):
         return self._add_state(s) + self._add_state(sn)
+    
+    # def bestActions(self, s, terminal, p_actions, phi_s=None):
+    #     return 1
+    
+    def Qs(self, s, terminal, phi_s=None):
+        # Q -> Array of Q(s, a) values for this state
+        # A -> Corresponding IDs
+        num_a = self.actions_num
+        Q = np.zeros(num_a) 
+        return Q
 
     def _add_state(self, s):
         """
