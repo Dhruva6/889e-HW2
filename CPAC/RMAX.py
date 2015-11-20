@@ -12,9 +12,7 @@ __license__ = "BSD 3-Clause"
 class RMAX(DescentAlgorithm, Agent):
     QMax = 0.0
 
-    def __init__(self, policy, representation,
-                 discount_factor, lipshitz_c=1000, RMAX=10**10, k=1,
-                 **kwargs):        
+    def __init__(self, policy, representation, discount_factor, lambda_=0, **kwargs):
         super(
             RMAX,
             self).__init__(policy=policy,
@@ -32,12 +30,12 @@ class RMAX(DescentAlgorithm, Agent):
 
         self.representation.pre_discover(s, prevStateTerminal, a, ns, terminal)
 
-        expanded = self.representation.post_discover(
-            s,
-            prevStateTerminal,
-            a,
-            td_error,
-            phi_s)
+       # expanded = self.representation.post_discover(
+       #     s,
+       #     prevStateTerminal,
+       #     a,
+       #     td_error,
+       #     phi_s)
 
         if terminal:
             # If THIS state is terminal:

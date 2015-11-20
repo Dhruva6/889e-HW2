@@ -32,7 +32,7 @@ def make_experiment(
     representation = RMAX_repr(
         domain,
         discretization=discretization)
-    policy = eGreedy(representation, epsilon=0.0)
+    policy = eGreedy(representation, epsilon=0.1)
     opt["agent"] = RMAX(
         policy, representation,discount_factor=domain.discount_factor,
         lambda_=0.9, initial_learn_rate=initial_learn_rate,
@@ -45,6 +45,6 @@ if __name__ == '__main__':
     # run_profiled(make_experiment)
     experiment = make_experiment(1)
     experiment.run(visualize_learning=True)
-    #experiment.plot()
+   # experiment.plot()
     # experiment.save()
 
