@@ -22,16 +22,18 @@ def make_experiment(
     opt["exp_id"] = exp_id
     opt["path"] = path
     #opt["max_steps"] = 150000
-    opt["max_steps"] = 2
+    opt["max_steps"] = 10
     #opt["num_policy_checks"] = 30
     opt["num_policy_checks"] = 1
     opt["checks_per_policy"] = 1
 
+    Rmax = 10**12
+    lipschitz_constant = 10**3
+
     domain = HIVTreatment()
     opt["domain"] = domain
     representation = RMAX_repr(
-        domain,
-        discretization=discretization)
+        domain, Rmax, lipschitz_constant)
     policy = eGreedy(representation, epsilon=0.1)
     opt["agent"] = RMAX(
         policy, representation,discount_factor=domain.discount_factor,

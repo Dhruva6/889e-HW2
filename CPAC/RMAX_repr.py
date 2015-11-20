@@ -3,6 +3,7 @@
 from rlpy.Representations.Representation import Representation
 import numpy as np
 from copy import deepcopy
+from sklearn.neighbors import LSHForest
 
 __copyright__ = "Copyright 2013, RLPy http://acl.mit.edu/RLPy"
 __credits__ = ["Alborz Geramifard", "Robert H. Klein", "Christoph Dann",
@@ -21,28 +22,36 @@ class RMAX_repr(Representation):
     state at the outset.
 
     """
-    hash = None
+    def __init__(self, domain, Rmax, LQ, k = 1, epsilon_d = 0.01):
+        # LQ is the lipschitz constant - 10**3 according to the paper (by Cross Validn)
+        self.LQ = LQ
+        self.gamma = domain.discount_factor
 
-    def __init__(self, domain, discretization=20):
-        self.hash = {}
-        self.features_num = 0
-        self.isDynamic = True
+        self.rmax = Rmax
+        self.qmax = Rmax / (1-self.gamma)
+        self.qmax_tilda = Rmax + self.gamma * self.qmax
+        self.epsilon = epsilon_d
+
+        # Approximate k-NN is used when finding the Q value of a point
+        self.k = k
+
+        # We also keep track of the states sampled so far
+        self.samples = {}
+
+        # And we use an LSH to find the approximate k-Nearest neighbours
+        # by training it on every s, a, r, s' tuple we see
+        self.init_randomization()
+        
         super(
             RMAX_repr,
             self).__init__(
-            domain,
-            discretization)
+            domain)
 
-    def phi_nonTerminal(self, s):
-        hash_id = self.hashState(s)
-        hashVal = self.hash.get(hash_id)
-        F_s = np.zeros(self.features_num, bool)
-        if hashVal is not None:
-            F_s[hashVal] = 1
-        return F_s
+    def init_randomization(self):
+        self.LSH = LSHForest(n_neighbors=self.k, random_state=self.random_state)
 
     def pre_discover(self, s, terminal, a, sn, terminaln):
-        return self._add_state(s) + self._add_state(sn)
+        return
     
     # def bestActions(self, s, terminal, p_actions, phi_s=None):
     #     return 1
@@ -53,35 +62,6 @@ class RMAX_repr(Representation):
         num_a = self.actions_num
         Q = np.zeros(num_a) 
         return Q
-
-    def _add_state(self, s):
-        """
-        :param s: the (possibly un-cached) state to hash.
-        
-        Accepts state ``s``; if it has been cached already, do nothing and 
-        return 0; if not, add it to the hash table and return 1.
-        
-        """
-        
-        hash_id = self.hashState(s)
-        hashVal = self.hash.get(hash_id)
-        if hashVal is None:
-            # New State
-            self.features_num += 1
-            # New id = feature_num - 1
-            hashVal = self.features_num - 1
-            self.hash[hash_id] = hashVal
-            # Add a new element to the feature weight vector, theta
-            self.addNewWeight()
-            return 1
-        return 0
-
-    def __deepcopy__(self, memo):
-        new_copy = IncrementalTabular(
-            self.domain,
-            self.discretization)
-        new_copy.hash = deepcopy(self.hash)
-        return new_copy
 
     def featureType(self):
         return bool
