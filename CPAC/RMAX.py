@@ -23,7 +23,7 @@ class RMAX(DescentAlgorithm, Agent):
         # (otherwise the episode would have already terminated)
         prevStateTerminal = False
         
-        self.representation.pre_discover(s, prevStateTerminal, a, ns, terminal)
+        self.representation.pre_discover(s, prevStateTerminal, a, r, ns, terminal)
 
        # expanded = self.representation.post_discover(
        #     s,
