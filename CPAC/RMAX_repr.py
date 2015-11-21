@@ -4,6 +4,7 @@ from rlpy.Representations.Representation import Representation
 import numpy as np
 from copy import deepcopy
 from sklearn.neighbors import LSHForest
+import scipy.spatial.distance.cdist as distance
 
 __copyright__ = "Copyright 2013, RLPy http://acl.mit.edu/RLPy"
 __credits__ = ["Alborz Geramifard", "Robert H. Klein", "Christoph Dann",
@@ -52,10 +53,22 @@ class RMAX_repr(Representation):
 
     def pre_discover(self, s, terminal, a, sn, terminaln):
         return
-    
-    # def bestActions(self, s, terminal, p_actions, phi_s=None):
-    #     return 1
-    
+
+    # Compute a distance metric between (s, a) and (ns, na).
+    # Using max-norm as in the paper for now.
+    def d(self, s, a, ns, na):
+        # Create one big s,a array
+        sa = np.copy(s).append(a)
+        nsa = np.copy(ns).append(na)
+        # Use scipy to compute the chebyshev distance => Max norm
+        return distance(sa, nsa, 'chebyshev')
+
+    # The approximate Q function 
+    def Q_tilda(self, s, a):
+        # First get the k-nearest sampled neighbours to this point using LSH
+        return 0
+        
+
     def Qs(self, s, terminal, phi_s=None):
         # Q -> Array of Q(s, a) values for this state
         # A -> Corresponding IDs

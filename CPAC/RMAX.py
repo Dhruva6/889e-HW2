@@ -18,16 +18,11 @@ class RMAX(DescentAlgorithm, Agent):
             self).__init__(policy=policy,
             representation=representation, discount_factor=discount_factor, **kwargs)
 
-    def _future_action(self, ns, terminal, np_actions, ns_phi, na):
-        """needs to be implemented by children"""
-        pass
-
     def learn(self, s, p_actions, a, r, ns, np_actions, na, terminal):
         # The previous state could never be terminal
         # (otherwise the episode would have already terminated)
         prevStateTerminal = False
-
-
+        
         self.representation.pre_discover(s, prevStateTerminal, a, ns, terminal)
 
        # expanded = self.representation.post_discover(
