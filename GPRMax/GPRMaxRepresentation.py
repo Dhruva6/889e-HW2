@@ -3,6 +3,7 @@
 from rlpy.Representations import Representation, IncrementalTabular
 import numpy as np
 from copy import deepcopy
+import math
 
 __copyright__ = "Copyright 2013, RLPy http://acl.mit.edu/RLPy"
 __credits__ = ["Alborz Geramifard", "Robert H. Klein", "Christoph Dann",
@@ -26,8 +27,11 @@ class GPRMaxRepresentation(IncrementalTabular):
     # the upper bound on the Rewards
     RMax = 1e09
 
+    #
+    discountFactor = 0.9
+    
     # the upper bound on the sum of discounted future rewards
-    VMax = RMax
+    VMax = RMax/(1-discountFactor)
 
     # the minimum variance in the data below which exploitation is prefered over exploration
     minVarToExplore = 1;
@@ -38,6 +42,7 @@ class GPRMaxRepresentation(IncrementalTabular):
 
     # can the learners be used for computing Q values
     canUseLearners = False
+
        
     def __init__(self, domain, discretization=20):
         self.hash = {}
@@ -49,9 +54,6 @@ class GPRMaxRepresentation(IncrementalTabular):
             self).__init__(
             domain,
             discretization)
-
-        # update VMax
-        self.VMax = self.RMax/(1-self.domain.discount_factor)
 
 
     def phi_nonTerminal(self, s):
@@ -127,7 +129,7 @@ class GPRMaxRepresentation(IncrementalTabular):
 
             # the mean reward of all state dimensions
             Q[aIdx] = np.mean(rewards)        
-
+    
         # the predicted state transition delta
         ds = np.zeros(len(s))
 
@@ -141,9 +143,11 @@ class GPRMaxRepresentation(IncrementalTabular):
         currState = s
 
         # the discount factor
-        gamma = self.domain.discount_factor
+        gamma = self.discountFactor
 
-        numSteps = 5
+        # compute the number of steps
+        numSteps = 0 #int(math.floor(1/(1-gamma)))
+
         for steps in range(numSteps):
             
             #
@@ -163,9 +167,11 @@ class GPRMaxRepresentation(IncrementalTabular):
 
                 if dsVar[i] > 1.0:
                     dsVar[i] = 1.0
-                    
+
+            maxVar = np.max(dsVar)
+            
             # the new state is the sum of the current state plus or transition
-            currState = s + ds
+            currState = currState + ds
 
             # update the discount factor
             gamma *= gamma
@@ -180,116 +186,9 @@ class GPRMaxRepresentation(IncrementalTabular):
                     rewards[i], _, _, _, _ = self.rewardLearners[actIdx+i].predict(np.ones((1,1)) * currState[i])
 
                 # update single step
-                Q[aIdx] = (1-dsVar[i]) * (Q[aIdx] + gamma * np.mean(rewards)) + (dsVar[i] * self.VMax)
+                #Q[aIdx] += gamma * np.mean(rewards)
+                Q[aIdx] = (1-maxVar) * (Q[aIdx] + gamma * np.mean(rewards)) + (maxVar * self.VMax)
 
         return Q
 
 
-    # def Q_oneStepLookAhead(self, s, a, ns_samples, policy=None, numSteps=1):
-    #     """
-    #     Returns the state action value, Q(s,a), by performing n step
-    #     look-ahead on the domain.
-
-    #     .. note::
-    #         For an example of how this function works, see
-    #         `Line 8 of Figure 4.3 <http://webdocs.cs.ualberta.ca/~sutton/book/ebook/node43.html>`_
-    #         in Sutton and Barto 1998.
-
-    #     .. note::
-    #         This function should not be called in any RL algorithms unless
-    #         the underlying domain is an approximation of the true model.
-
-    #     :param s: The given state
-    #     :param a: The given action
-    #     :param ns_samples: The number of samples used to estimate the one_step look-ahead.
-    #     :param policy: (optional) Used to select the action in the next state
-    #         (*after* taking action a) when estimating the one_step look-aghead.
-    #         If ``policy == None``, the best action will be selected.
-
-    #     :return: The one-step lookahead state-action value, Q(s,a).
-    #     """
-    #     discount_factor = self.domain.discount_factor
-
-    #     #
-    #     # compute the N-step lookahead state-action value
-    #     #
-
-    #     # the predicted state transition delta
-    #     ds = np.zeros(len(s))
-
-    #     # the variance in the delta prediction 
-    #     dsVar = np.zeros(len(s))
-
-    #     # the reward
-    #     reward = np.zeros(len(s))
-
-    #     # the current state and action
-    #     currState = s;
-    #     currAction = a;
-
-    #     # compute the mean reward for the current state
-    #     for i in range(len(s)):
-    #         reward[i], _, _, _, _ = self.rewardLearners[a*len(s)+i].predict(np.ones((1,1)) * currState[i])
-
-    #     # initialize the reward for the current step
-    #     currReward = np.mean(reward)
-
-    #     # cumulative reward
-    #     cumulativeReward = currReward
-
-    #     # the next reward
-    #     nextReward = np.zeros(self.domain.actions_num)
-
-    #     # the next state
-    #     nextState = np.zeros((self.domain.actions_num, len(s)))
-
-    #     # predicted variance score
-    #     predVarScore = np.zeros(self.domain.actions_num)
-        
-    #     # iterate through and compute the approximate Q value for n-steps 
-    #     for steps in range(numSteps):
-
-    #         # iterate through all the actions
-    #         for aIdx in range(self.domain.actions_num):
-
-    #             # the action index
-    #             actIdx = aIdx * len(s)
-                
-    #             # predict the transition for the current action from the current state
-    #             for i in range(len(s)):
-    #                 ds[i],dsVar[i], _, _, _ = self.transitionLearners[actIdx+i].predict(np.ones((1,1)) * currState[i])
-                
-    #             # score of the stacked predicted variance
-    #             predVarScore[aIdx] =  np.max(dsVar)/self.minVarToExplore
-
-    #             # upper bound the score
-    #             if predVarScore[aIdx] > 1.0:
-    #                 predVarScore[aIdx] = 1.0
-                
-    #             # the next state
-    #             nextState[aIdx][:] = currState + ds
-                
-    #             # predict the rewards for the next state
-    #             for i in range(len(s)):
-    #                 reward[i], _, _, _, _ = self.rewardLearners[actIdx+i].predict(np.ones((1,1)) * nextState[aIdx][i])
-
-    #             # the next state reward
-    #             nextReward[aIdx] = discount_factor * np.mean(reward)
-            
-    #         # the predicted Q value for the next state
-    #         currReward = (1-np.max(predVarScore)) * (currReward + np.max(nextReward)) #+ np.max(predVarScore) * self.VMax
-
-    #         # print predVarScore
-    #         # print nextReward
-    #         # assert False
-            
-    #         # update cumulativeReward
-    #         cumulativeReward += currReward
-            
-    #         # to the next state
-    #         currState = currState + nextState[np.argmax(nextReward)][:]
-
-    #         # update the discount factor
-    #         discount_factor *= discount_factor
-
-    #     return cumulativeReward
