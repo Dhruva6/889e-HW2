@@ -110,7 +110,7 @@ class GPRMax(DescentAlgorithm, Agent):
             modelUpdated = True
 
             # dump the action distribution of samples seen so far
-            self.logger.info("Training on %d samples.\nSample Action Histogram" % self.tick)
+            self.logger.info("Training on %d samples.\nAction Histogram" % self.tick)
             self.logger.info(self.actionHist)
             
             # for every action, gather all the relevant states, diffStates and train
