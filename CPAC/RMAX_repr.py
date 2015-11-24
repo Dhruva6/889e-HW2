@@ -136,9 +136,6 @@ class RMAX_repr(Representation):
             Q[a] = self.Q_tilda(s, a)
         return Q
 
-    def featureType(self):
-        return bool
-
 
 def test_script():
     from rlpy.Domains.HIVTreatment import HIVTreatment
