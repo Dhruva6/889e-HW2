@@ -1,10 +1,12 @@
 from rlpy.Domains.HIVTreatment import HIVTreatment
+from rlpy.Policies import UniformRandom
 from rlpy.Policies import eGreedy
 from rlpy.Experiments import Experiment
 from rlpy.Representations import IncrementalTabular
 
 import numpy as np
 from GPRMax import GPRMax
+from GPRMaxRepresentation import GPRMaxRepresentation
 
 def make_experiment(
         exp_id=1, path="./Results/Temp/{domain}/{agent}/{representation}/",
@@ -15,14 +17,14 @@ def make_experiment(
     opt = {}
     opt["exp_id"] = exp_id
     opt["path"] = path
-    opt["max_steps"] = 5000
-    opt["num_policy_checks"] = 1
+    opt["max_steps"] = 1000
+    opt["num_policy_checks"] = 10
     opt["checks_per_policy"] = 1
 
     domain = HIVTreatment()
     opt["domain"] = domain
-    representation = IncrementalTabular(domain)
-    policy = eGreedy(representation)
+    representation = GPRMaxRepresentation(domain)
+    policy = eGreedy(representation, epsilon=0.0)
     opt["agent"] = GPRMax(
         policy, representation, domain.actions_num, len(domain.state_names),
         discount_factor=domain.discount_factor,
@@ -36,6 +38,6 @@ if __name__ == '__main__':
     # run_profiled(make_experiment)
     experiment = make_experiment(1)
     experiment.run(visualize_learning=True)
-   # experiment.plot()
+    experiment.plot()
     # experiment.save()
 

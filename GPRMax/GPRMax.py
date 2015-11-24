@@ -1,6 +1,7 @@
 """Control Agents based on TD Learning, i.e., Q-Learning and SARSA"""
 from rlpy.Agents.Agent import Agent, DescentAlgorithm
 from rlpy.Tools import addNewElementForAllActions, count_nonzero
+from rlpy.MDPSolvers import TrajectoryBasedPolicyIteration
 from random import sample
 import pyGPs
 import numpy as np
@@ -22,7 +23,7 @@ class GPRMax(DescentAlgorithm, Agent):
     tick = 0
 
     # the number of iterations to skip before training the GP's
-    trainEveryNSteps = 500;
+    trainEveryNSteps = 50;
 
     # the local copy of state, difference between next state and current state, action and rewards
     statesCache = collections.deque(maxlen=1e5)
@@ -47,7 +48,7 @@ class GPRMax(DescentAlgorithm, Agent):
     rewardLearners = [];
 
     # the histogram of actions seen so far
-    actionsHist = np.zeros(1);
+    actionsHist = np.zeros(1);   
 
     def __init__(self, policy, representation, actionsDim, statesDim, discount_factor, lambda_=0, **kwargs):
         super(
@@ -69,6 +70,13 @@ class GPRMax(DescentAlgorithm, Agent):
 
         # instantiate rewardLearners
         self.rewardLearners = [pyGPs.GPR_FITC() for i in range(self.statesDim * self.actionsDim)]
+
+        # pass along the learners 
+        self.representation.setLearners(self.transitionLearners, self.rewardLearners)
+
+        # trajectory based policy iteration
+        self.jobId = 1;
+        self.trajPI = TrajectoryBasedPolicyIteration(self.jobId, self.representation, self.representation.domain, planning_time=3) 
 
     def learn(self, s, p_actions, a, r, ns, np_actions, na, terminal):
 
@@ -114,6 +122,11 @@ class GPRMax(DescentAlgorithm, Agent):
                 # find all the indexes in the actionsCache that match actIdx
                 indexes = [i for i,x in enumerate(self.actionsCache) if x == actIdx]
 
+                # if the indexes list is empty, the model has not been updated
+                if indexes == []:
+                    modelUpdated =  modelUpdated and False
+                    continue
+
                 # allocate memory for the input, output
                 x = np.zeros(len(indexes))
                 y = np.zeros(len(indexes))
@@ -129,19 +142,17 @@ class GPRMax(DescentAlgorithm, Agent):
                         rwd[ii] = self.rewardsCache[idx]
 
                     # pass the data along and learn 
-                    self.transitionLearners[gpStartIdx+dim].setData(x,y, value_per_axis=10)
+                    self.transitionLearners[gpStartIdx+dim].setData(x,y)
                     self.transitionLearners[gpStartIdx+dim].optimize()
 
                     # pass the data along and learn
-                    self.rewardLearners[gpStartIdx+dim].setData(x,rwd, value_per_axis=10)
+                    self.rewardLearners[gpStartIdx+dim].setData(x,rwd)
                     self.rewardLearners[gpStartIdx+dim].optimize()
  
         # If learning happened in this iteration, update the model that will be used
         if modelUpdated:
-
-            phi_s = self.representation.phi(s, prevStateTerminal)
-            phi_sa = self.representation.phi_sa(s, prevStateTerminal, a, phi_s)            
-            a = self.policy.pi(s, terminal, p_actions)
+            self.representation.setCanUseLearners()
+            #self.trajPI.solve()
         
         # expanded = self.representation.post_discover(
         #     s,
