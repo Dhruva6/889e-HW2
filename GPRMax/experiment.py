@@ -17,17 +17,24 @@ def make_experiment(
     opt = {}
     opt["exp_id"] = exp_id
     opt["path"] = path
-    opt["max_steps"] = 1000
-    opt["num_policy_checks"] = 10
-    opt["checks_per_policy"] = 1
+    opt["max_steps"] = 100
+    opt["num_policy_checks"] = 50
+    opt["checks_per_policy"] = 2
+
+    # the Horizon length
+    H = 5.0
+
+    # the discount factor
+    gamma = 1.0 - 1.0/H
 
     domain = HIVTreatment()
     opt["domain"] = domain
     representation = GPRMaxRepresentation(domain)
+    representation.discountFactor = gamma
     policy = eGreedy(representation, epsilon=0.0)
     opt["agent"] = GPRMax(
         policy, representation, domain.actions_num, len(domain.state_names),
-        discount_factor=domain.discount_factor,
+        discount_factor=gamma,
         lambda_=0.9,initial_learn_rate=initial_learn_rate,
         learn_rate_decay_mode="boyan", boyan_N0=boyan_N0)
     experiment = Experiment(**opt)
