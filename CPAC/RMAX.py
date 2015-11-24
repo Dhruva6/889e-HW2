@@ -25,13 +25,6 @@ class RMAX(DescentAlgorithm, Agent):
         
         self.representation.pre_discover(s, prevStateTerminal, a, r, ns, terminal)
 
-       # expanded = self.representation.post_discover(
-       #     s,
-       #     prevStateTerminal,
-       #     a,
-       #     td_error,
-       #     phi_s)
-
         if terminal:
             # If THIS state is terminal:
             self.episodeTerminated()
