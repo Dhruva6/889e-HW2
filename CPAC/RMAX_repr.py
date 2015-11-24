@@ -60,7 +60,7 @@ class RMAX_repr(Representation):
         except ValueError:
             return False
 
-        for idx in indices:
+        for idx in indices[0]:
             s_p, a_p = self.sample_list[idx]
             if self.LQ * self.d(s, a, s_p, a_p) > self.epsilon:
                 return False
@@ -95,15 +95,16 @@ class RMAX_repr(Representation):
     # The approximate Q function 
     def Q_tilda(self, s, a):
         k = self.k
+        q = 0.0
         # First get the k-nearest sampled neighbours to this point using LSH
         try:
             indices = self.approx_nn(s, a)
         except ValueError:
-            indices = []
-        q = 0.0
+            return self.qmax_tilda
+
         num_neighbors = 0
 
-        for index in indices:
+        for index in indices[0]:
             sj, aj = self.sample_list[index]
             dij = self.d(s, a, sj, aj)
             if dij <= (self.qmax / self.LQ):
@@ -137,3 +138,26 @@ class RMAX_repr(Representation):
 
     def featureType(self):
         return bool
+
+
+def test_script():
+    from rlpy.Domains.HIVTreatment import HIVTreatment
+    domain = HIVTreatment()
+    repr = RMAX_repr(domain, 10**10, 10**3, k=2)
+    assert(repr.rmax == 10**10)
+    assert(repr.LQ == 10**3)
+    assert(repr.k == 2)
+
+    # Now populate some random states and actions
+    repr.pre_discover([1, 1], False, 0, 100, [1, 2], False)
+    repr.pre_discover([1, 2], False, 0, 100, [1, 3], False)
+    repr.pre_discover([1, 3], False, 0, 100, [1, 3], False)
+    repr.pre_discover([1, 4], False, 0, 100, [1, 4], False)
+
+    #print repr.approx_nn([1, 3.9], 0)
+    indices = repr.approx_nn([1, 4], 0)
+    print repr.Q_tilda([1, 3], 0)
+    print repr.sample_values
+    
+if __name__=="__main__":
+    test_script()
