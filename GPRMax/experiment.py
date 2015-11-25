@@ -22,7 +22,7 @@ def make_experiment(
     opt["checks_per_policy"] = 1
 
     # the Horizon length
-    H = 50.0
+    H = 1.0
 
     # the discount factor
     gamma = 1.0 - (1.0/H)
