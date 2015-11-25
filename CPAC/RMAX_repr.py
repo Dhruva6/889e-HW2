@@ -3,7 +3,10 @@
 from rlpy.Representations.Representation import Representation
 import numpy as np
 from copy import deepcopy
-from sklearn.neighbors import LSHForest
+from nearpy import Engine
+from nearpy.hashes import RandomBinaryProjections
+from nearpy.filters import NearestFilter
+from nearpy.distances import ChebyshevDistance
 from scipy.spatial.distance import chebyshev as distance
 
 __copyright__ = "Copyright 2013, RLPy http://acl.mit.edu/RLPy"
@@ -37,7 +40,8 @@ class RMAX_repr(Representation):
         self.k = k
 
         # We also keep track of the states sampled so far
-        self.sample_list = []
+        self.sample_list = [0]*(2*100000)
+        self.list_idx = 0
         # And a dictionary for quick lookups of already computed values
         self.sample_values = {}
 
@@ -50,17 +54,19 @@ class RMAX_repr(Representation):
             self).__init__(
             domain)
 
+    
     def init_randomization(self):
-        self.LSH = LSHForest(n_neighbors=self.k, random_state=self.random_state)
+        rbp = RandomBinaryProjections('rbp', 10)
+        from nearpy.distances import ChebyshevDistance
+        self.engine = Engine(7, lshashes = [rbp], vector_filters=[NearestFilter(self.k)], distance=ChebyshevDistance())
 
     def is_known(self, s, a):
         # A s, a pair is 'known' if LQ * d(s, a, s', a') < epsilon_d
-        try:
-            indices = self.approx_nn(s, a)
-        except ValueError:
+        indices = self.approx_nn(s, a)
+        if not indices:
             return False
 
-        for idx in indices[0]:
+        for idx in indices:
             s_p, a_p = self.sample_list[idx]
             if self.LQ * self.d(s, a, s_p, a_p) > self.epsilon:
                 return False
@@ -70,10 +76,14 @@ class RMAX_repr(Representation):
         # In the learning stage, if sa is not 'known' add it to the sample list
         # and its value to sample value.
         if not self.is_known(s, a):
-            self.sample_list.append((s, a))
             x = r + self.gamma * max(self.Q_tilda(ns, a_p) for a_p in range(self.actions_num))
+
+            self.engine.store_vector(np.append(s, a), self.list_idx)            
+            self.sample_list[self.list_idx]= (s, a)
+            self.list_idx+=1
             self.sample_values[self.sa_tuple(s, a)] = x
-            self.LSH.partial_fit(np.append(s, a))
+
+            #self.LSH.partial_fit(np.append(s, a))
         super(RMAX_repr, self).pre_discover(s, p_terminal, a, ns, terminal)
 
     # Compute a distance metric between (s, a) and (ns, na).
@@ -86,7 +96,10 @@ class RMAX_repr(Representation):
         return distance(sa, nsa)
 
     def approx_nn(self, s, a):
-        dist, indices = self.LSH.kneighbors(np.append(s, a))
+        #dist, indices = self.LSH.kneighbors(np.append(s, a))
+        # returns a list of
+        l = self.engine.neighbours(np.append(s, a))
+        indices = [elem[1] for elem in l]
         return indices
 
     def sa_tuple(self, s, a):
@@ -97,14 +110,10 @@ class RMAX_repr(Representation):
         k = self.k
         q = 0.0
         # First get the k-nearest sampled neighbours to this point using LSH
-        try:
-            indices = self.approx_nn(s, a)
-        except ValueError:
-            return self.qmax_tilda
-
+        indices = self.approx_nn(s, a)
         num_neighbors = 0
 
-        for index in indices[0]:
+        for index in indices:
             sj, aj = self.sample_list[index]
             dij = self.d(s, a, sj, aj)
             if dij <= (self.qmax / self.LQ):
@@ -127,10 +136,10 @@ class RMAX_repr(Representation):
         # estimate prior performance. In that case, the LSHF would throw a 
         # Value Error. We pre-empt that here
         Q = np.zeros((self.actions_num))
-        try :
-            self.LSH.kneighbors(np.append(s, 0))
-        except ValueError:
-            return Q
+        #try :
+        #    self.LSH.kneighbors(np.append(s, 0))
+        #except ValueError:
+        #    return Q
     
         for a in range(self.actions_num):
             Q[a] = self.Q_tilda(s, a)
@@ -146,15 +155,19 @@ def test_script():
     assert(repr.k == 2)
 
     # Now populate some random states and actions
-    repr.pre_discover([1, 1], False, 0, 100, [1, 2], False)
-    repr.pre_discover([1, 2], False, 0, 100, [1, 3], False)
-    repr.pre_discover([1, 3], False, 0, 100, [1, 3], False)
-    repr.pre_discover([1, 4], False, 0, 100, [1, 4], False)
+    repr.pre_discover([1, 1]*3, False, 0, 100, [1, 2], False)
+    repr.pre_discover([1, 2]*3, False, 0, 100, [1, 3], False)
+    repr.pre_discover([1, 3]*3, False, 0, 100, [1, 3], False)
+    repr.pre_discover([1, 4]*3, False, 0, 100, [1, 4], False)
 
     #print repr.approx_nn([1, 3.9], 0)
-    indices = repr.approx_nn([1, 4], 0)
-    print repr.Q_tilda([1, 3], 0)
-    print repr.sample_values
+    indices = repr.approx_nn([1, 4]*3, 0)
+    print repr.engine.neighbours([1,4]*3+[0])
+    print indices
+    #print repr.Q_tilda([1, 3], 0)
+    #print repr.sample_values
+    for idx in indices:
+        print repr.sample_list[idx]
     
 if __name__=="__main__":
     test_script()
