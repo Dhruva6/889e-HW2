@@ -23,13 +23,16 @@ class GPRMax(DescentAlgorithm, Agent):
     tick = 0
 
     # the number of iterations to skip before training the GP's
-    trainEveryNSteps = 50;
+    trainEveryNSteps = 200
+
+    # the maximum length of the queue
+    maxQLen = 10000
 
     # the local copy of state, difference between next state and current state, action and rewards
-    statesCache = collections.deque(maxlen=1e5)
-    diffStatesCache = collections.deque(maxlen=1e5)
-    actionsCache = collections.deque(maxlen=1e5)
-    rewardsCache = collections.deque(maxlen=1e5)
+    statesCache = collections.deque(maxlen=maxQLen)
+    diffStatesCache = collections.deque(maxlen=maxQLen)
+    actionsCache = collections.deque(maxlen=maxQLen)
+    rewardsCache = collections.deque(maxlen=maxQLen)
 
     #
     # the number of GP's depend on the dimensionality of the state and action space
@@ -71,12 +74,24 @@ class GPRMax(DescentAlgorithm, Agent):
         # instantiate rewardLearners
         self.rewardLearners = [pyGPs.GPR_FITC() for i in range(self.statesDim * self.actionsDim)]
 
+
         # pass along the learners 
         self.representation.setLearners(self.transitionLearners, self.rewardLearners)
 
-        # trajectory based policy iteration
-        self.jobId = 1;
-        self.trajPI = TrajectoryBasedPolicyIteration(self.jobId, self.representation, self.representation.domain, planning_time=3) 
+        # inducing points u
+        limits = self.representation.domain.statespace_limits[0]
+        numPts = 10
+        uTransition = np.linspace(limits[0], limits[1], numPts)
+
+        uRewards = np.linspace(0, 1, numPts)
+
+        for i in range(self.statesDim * self.actionsDim):
+            self.transitionLearners[i].setPrior(inducing_points = uTransition)
+            self.rewardLearners[i].setPrior(inducing_points = uRewards)
+        
+        # # trajectory based policy iteration
+        # self.jobId = 1;
+        # self.trajPI = TrajectoryBasedPolicyIteration(self.jobId, self.representation, self.representation.domain, planning_time=3) 
 
     def learn(self, s, p_actions, a, r, ns, np_actions, na, terminal):
 
@@ -98,14 +113,23 @@ class GPRMax(DescentAlgorithm, Agent):
         self.statesCache.append(s)
         self.actionsCache.append(a)
         self.diffStatesCache.append(ns-s)
-        self.rewardsCache.append(r)
+
+        # the minimum reward directly taken from the domain
+        minReward = -0.1*8 - 2e4*0.7**2 - 2e3 * 0.7 **2 + 1e3 * -5
+        nRwd = (r - minReward)/(self.representation.RMax - minReward)
+        if nRwd > 1.0:
+            nRwd = 1.0
+        if nRwd < 0.0:
+            nRwd = 0.0
+
+        self.rewardsCache.append(nRwd)
 
         # have the transistion and reward models been updated this iteration
         modelUpdated = False
-        
+
         # if it is time to learn - currently not limiting the number of samples
         if self.tick % self.trainEveryNSteps == 0:
-            
+
             # set the modelUpdated flag
             modelUpdated = True
 
@@ -141,7 +165,7 @@ class GPRMax(DescentAlgorithm, Agent):
                         y[ii] = self.diffStatesCache[idx][dim]
                         rwd[ii] = self.rewardsCache[idx]
 
-                    # pass the data along and learn 
+                    # pass the data along and learn
                     self.transitionLearners[gpStartIdx+dim].setData(x,y)
                     self.transitionLearners[gpStartIdx+dim].optimize()
 
