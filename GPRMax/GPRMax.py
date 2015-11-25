@@ -77,9 +77,9 @@ class GPRMax(DescentAlgorithm, Agent):
         # tick up the currentIteration
         self.tick += 1
       
-        # print for debug
-        if 0 == self.tick%100:
-            self.logger.info("Current iteration %d" % self.tick);
+        # # print for debug
+        # if 0 == self.tick%100:
+        #     self.logger.info("Current iteration %d" % self.tick);
 
         # update the actionsHist
         self.actionHist[a] += 1
@@ -100,7 +100,7 @@ class GPRMax(DescentAlgorithm, Agent):
             modelUpdated = True
 
             # dump the action distribution of samples seen so far
-            self.logger.info("Training on %d samples.\nAction Histogram" % self.tick)
+            self.logger.info("Training on %d samples." % self.tick)
             #self.logger.info(self.actionHist)
 
             # clear out the transition learners
