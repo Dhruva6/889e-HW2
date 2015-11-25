@@ -164,6 +164,8 @@ class GPRMax(DescentAlgorithm, Agent):
  
         if modelUpdated == True:
 
+            numSteps = int(1.0/(1.0-self.discountFactor))
+            
             # iterate through all the stored state and update their respective Q values
             for ii in range(len(self.fullStatesCache)):
 
@@ -174,23 +176,37 @@ class GPRMax(DescentAlgorithm, Agent):
                 gamma = self.discountFactor
 
                 # the delta state
-                ds = np.zeros(len(currState))
+                ds = np.zeros((self.statesDim, self.actionsDim))
+
+                # now iterate through for numSteps and update the Q value 
+                for steps in range(numSteps):
                 
-                # iterate through all the actions
-                for aIdx in range(self.actionsDim):
+                    # iterate through all the actions
+                    for aIdx in range(self.actionsDim):
 
-                    actIdx = aIdx * len(currState)
+                        # the current action index
+                        actIdx = aIdx * len(currState)
 
-                    # predict the rewards for the next state
-                    for idx in range(len(currState)):
-                        yp = self.transitionLearners[actIdx+idx].predict(np.ones((1,1))*currState[idx])[0]
-                        ds[idx] = yp.flatten()
+                        # predict the rewards for the next state
+                        for idx in range(len(currState)):
+                            yp = self.transitionLearners[actIdx+idx].predict(np.ones((1,1))*currState[idx])[0]
+                            ds[idx][aIdx] = yp.flatten()
 
-                    # predict the reward for the delta state ds[i]+s[i]
-                    ns = np.atleast_2d(np.array(currState + ds))
-                    yp = self.rewardLearners.predict(ns)[0]
+                        # predict the reward for the delta state ds[i]+s[i]
+                        ns = np.atleast_2d(np.array(currState + (ds[:,aIdx]).T))
+                        yp = self.rewardLearners.predict(ns)[0]
 
-                    self.qValCache[ii][aIdx] +=  yp.flatten()
+                        # update the cache
+                        self.qValCache[ii][aIdx] +=  gamma * yp.flatten()
+
+                    # the next best action
+                    nba = np.argmax(self.qValCache[ii])
+
+                    # the next state with the next best action
+                    currState = np.atleast_2d(np.array(currState + ds[:,nba]))
+
+                    # the next discount factor
+                    gamma *= gamma
                     
             # pass along the cache, the learners
             self.representation.setCache(self.fullStatesCache, self.qValCache)
