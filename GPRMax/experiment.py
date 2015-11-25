@@ -19,10 +19,10 @@ def make_experiment(
     opt["path"] = path
     opt["max_steps"] = 10000
     opt["num_policy_checks"] = 10
-    opt["checks_per_policy"] = 2
+    opt["checks_per_policy"] = 1
 
     # the Horizon length
-    H = 5.0
+    H = 1.0
 
     # the discount factor
     gamma = 1.0 - (1.0/H)
@@ -33,7 +33,7 @@ def make_experiment(
     opt["domain"] = domain
 
     # update the discount factor for the domain
-    domain.discount_factor = gamma
+    #domain.discount_factor = gamma
 
     # create the representation
     representation = GPRMaxRepresentation(domain)
@@ -42,7 +42,7 @@ def make_experiment(
     representation.discountFactor = gamma
 
     # instantiate the policy
-    policy = eGreedy(representation, epsilon=0.0)
+    policy = eGreedy(representation, epsilon=0)
     
     opt["agent"] = GPRMax(
         policy, representation, domain.actions_num, len(domain.state_names),

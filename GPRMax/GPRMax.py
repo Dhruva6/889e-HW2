@@ -1,11 +1,11 @@
 """Control Agents based on TD Learning, i.e., Q-Learning and SARSA"""
 from rlpy.Agents.Agent import Agent, DescentAlgorithm
 from rlpy.Tools import addNewElementForAllActions, count_nonzero
-from rlpy.MDPSolvers import TrajectoryBasedPolicyIteration
 from random import sample
-import pyGPs
+import GPy
 import numpy as np
 import collections
+import math
 
 __copyright__ = ""
 __credits__ = [""]
@@ -23,10 +23,10 @@ class GPRMax(DescentAlgorithm, Agent):
     tick = 0
 
     # the number of iterations to skip before training the GP's
-    trainEveryNSteps = 200
+    trainEveryNSteps = 400
 
     # the maximum length of the queue
-    maxQLen = 10000
+    maxQLen = 20000
 
     # the local copy of state, difference between next state and current state, action and rewards
     statesCache = collections.deque(maxlen=maxQLen)
@@ -47,9 +47,6 @@ class GPRMax(DescentAlgorithm, Agent):
     # the list of Gaussian process objects - a total of actionsDim * statesDim 
     transitionLearners = [];
 
-    # the reward model learner
-    rewardLearners = [];
-
     # the histogram of actions seen so far
     actionsHist = np.zeros(1);   
 
@@ -69,30 +66,8 @@ class GPRMax(DescentAlgorithm, Agent):
         self.actionHist = np.zeros(self.actionsDim)
 
         # instantiate transitionLearners
-        self.transitionLearners = [pyGPs.GPR_FITC() for i in range(self.statesDim * self.actionsDim)]
-
-        # instantiate rewardLearners
-        self.rewardLearners = [pyGPs.GPR_FITC() for i in range(self.statesDim * self.actionsDim)]
-
-
-        # pass along the learners 
-        self.representation.setLearners(self.transitionLearners, self.rewardLearners)
-
-        # inducing points u
-        limits = self.representation.domain.statespace_limits[0]
-        numPts = 10
-        uTransition = np.linspace(limits[0], limits[1], numPts)
-
-        uRewards = np.linspace(0, 1, numPts)
-
-        for i in range(self.statesDim * self.actionsDim):
-            self.transitionLearners[i].setPrior(inducing_points = uTransition)
-            self.rewardLearners[i].setPrior(inducing_points = uRewards)
+        self.kernel = GPy.kern.RBF(1, 1, 1)
         
-        # # trajectory based policy iteration
-        # self.jobId = 1;
-        # self.trajPI = TrajectoryBasedPolicyIteration(self.jobId, self.representation, self.representation.domain, planning_time=3) 
-
     def learn(self, s, p_actions, a, r, ns, np_actions, na, terminal):
 
         # set prevStateTerminal to false and do the necessary calls to pre_discover
@@ -102,9 +77,9 @@ class GPRMax(DescentAlgorithm, Agent):
         # tick up the currentIteration
         self.tick += 1
       
-        # print for debug
-        if 0 == self.tick%100:
-            self.logger.info("Current iteration %d" % self.tick);
+        # # print for debug
+        # if 0 == self.tick%100:
+        #     self.logger.info("Current iteration %d" % self.tick);
 
         # update the actionsHist
         self.actionHist[a] += 1
@@ -112,17 +87,8 @@ class GPRMax(DescentAlgorithm, Agent):
         # add s, a, r to the statesCache, actionsCache and rewardsCache
         self.statesCache.append(s)
         self.actionsCache.append(a)
-        self.diffStatesCache.append(ns-s)
-
-        # the minimum reward directly taken from the domain
-        minReward = -0.1*8 - 2e4*0.7**2 - 2e3 * 0.7 **2 + 1e3 * -5
-        nRwd = (r - minReward)/(self.representation.RMax - minReward)
-        if nRwd > 1.0:
-            nRwd = 1.0
-        if nRwd < 0.0:
-            nRwd = 0.0
-
-        self.rewardsCache.append(nRwd)
+        self.diffStatesCache.append((ns-s))
+        self.rewardsCache.append(r)
 
         # have the transistion and reward models been updated this iteration
         modelUpdated = False
@@ -134,8 +100,11 @@ class GPRMax(DescentAlgorithm, Agent):
             modelUpdated = True
 
             # dump the action distribution of samples seen so far
-            self.logger.info("Training on %d samples.\nAction Histogram" % self.tick)
-            self.logger.info(self.actionHist)
+            self.logger.info("Training on %d samples." % self.tick)
+            #self.logger.info(self.actionHist)
+
+            # clear out the transition learners
+            self.transitionLearners = []
             
             # for every action, gather all the relevant states, diffStates and train
             for actIdx in range(self.actionsDim):
@@ -151,27 +120,35 @@ class GPRMax(DescentAlgorithm, Agent):
                     modelUpdated =  modelUpdated and False
                     continue
 
+                # if we have something valid, then try to learn
+                if modelUpdated == False:
+                    break
+                    
                 # allocate memory for the input, output
-                x = np.zeros(len(indexes))
-                y = np.zeros(len(indexes))
-                rwd = np.zeros(len(indexes))
+                X = np.zeros((len(indexes),1))
+                y = np.zeros((len(indexes),1))
 
                 # setup the input and output
                 for dim in range(self.statesDim):
 
                     # iterate through, populate the inputs and outputs
-                    for idx,ii in zip(indexes, range(len(x))):
-                        x[ii] = self.statesCache[idx][dim]
-                        y[ii] = self.diffStatesCache[idx][dim]
-                        rwd[ii] = self.rewardsCache[idx]
+                    for idx,ii in zip(indexes, range(len(indexes))):
+                        X[ii][0] = self.statesCache[idx][dim]
+                        y[ii][0] = self.diffStatesCache[idx][dim]
 
                     # pass the data along and learn
-                    self.transitionLearners[gpStartIdx+dim].setData(x,y)
+                    self.transitionLearners.append(GPy.models.SparseGPRegression(X,y))
                     self.transitionLearners[gpStartIdx+dim].optimize()
+                
+    
+            # learn the reward GP
+            X = np.atleast_2d(np.array(self.statesCache))
+            rwd = np.atleast_2d(np.array(self.rewardsCache)).T
 
-                    # pass the data along and learn
-                    self.rewardLearners[gpStartIdx+dim].setData(x,rwd)
-                    self.rewardLearners[gpStartIdx+dim].optimize()
+            self.rewardLearners = GPy.models.SparseGPRegression(X,rwd)
+            self.rewardLearners.optimize()
+
+            self.representation.setLearners(self.transitionLearners, self.rewardLearners)
  
         # If learning happened in this iteration, update the model that will be used
         if modelUpdated:

@@ -44,7 +44,7 @@ class GPRMaxRepresentation(IncrementalTabular):
     canUseLearners = False
 
     # just consider a single step when predicting Q values
-    singleStep = True
+    singleStep = False
 
        
     def __init__(self, domain, discretization=20):
@@ -119,23 +119,23 @@ class GPRMaxRepresentation(IncrementalTabular):
             return Q
 
         # the reward 
-        rewards = np.zeros(len(s))
-        rVar = np.zeros(len(s))
+        ds = np.zeros(len(s))
 
         # iterate through all the actions
         for aIdx in range(self.domain.actions_num):
 
             actIdx = aIdx * len(s)
-            
+
             # predict the rewards for the next state
-            try:
-                for i in range(len(s)):
-                    rewards[i], _, _, _, _ = self.rewardLearners[actIdx+i].predict(np.ones((1,1)) * s[i])
-            except ValueError:
-                pass
-            
-            # the mean reward of all state dimensions
-            Q[aIdx] = np.mean(rewards)        
+            for i in range(len(s)):
+                yp = self.transitionLearners[actIdx+i].predict(np.ones((1,1))*s[i])[0]
+                ds[i] = yp.flatten()
+
+            # predict the reward for the delta state ds[i]+s[i]
+            ns = np.atleast_2d(np.array(s + ds))
+            yp = self.rewardLearners.predict(ns)[0]
+
+            Q[aIdx] = yp.flatten()
 
         # if over-ridden to not go beyond the next step, silently return
         if self.singleStep == True:
@@ -169,14 +169,10 @@ class GPRMaxRepresentation(IncrementalTabular):
             # the index into the transition learners to predict the next action
             actIdx = bestAction * len(s)
 
-            ds = np.zeros(len(s))
-            
             # predict the transition for the current action from the current state
-            try:
-                for i in range(len(s)):
-                    ds[i],_, _, _, _ = self.transitionLearners[actIdx+i].predict(np.ones((1,1)) * currState[i])
-            except ValueError:
-                pass
+            for i in range(len(s)):
+                yp = self.transitionLearners[actIdx+i].predict(np.ones((1,1)) * currState[i])[0]
+                ds[i] = yp.flatten()
             
             # the new state is the sum of the current state plus or transition
             currState = currState + ds
@@ -189,23 +185,11 @@ class GPRMaxRepresentation(IncrementalTabular):
 
                 actIdx = aIdx * len(s)
 
-                rewards = np.zeros(len(s))
-                        
-                # predict the rewards for the next state
-                try:
-                    for i in range(len(s)):
-                        rewards[i], rVar[i], _, _, _ = self.rewardLearners[actIdx+i].predict(np.ones((1,1)) * currState[i])
-                        rVar[i] /= self.minVarToExplore
-                        if rVar[i] > 1.0 :
-                            rVar[i] = 1.0
-                except ValueError:
-                    pass
+                # predict the reward for the delta state ds[i]+s[i]
+                yp, yVar = self.rewardLearners.predict(np.atleast_2d(np.array(currState)))
 
-                # maximum variance in rewards
-                maxVar = np.max(rVar)
-                
                 # update single step
-                Q[aIdx] = (1-maxVar) * (Q[aIdx] + gamma * np.mean(rewards)) + (maxVar * self.VMax)
+                Q[aIdx] = (1-yVar.flatten()) * (Q[aIdx] + gamma * yp.flatten()) + (yVar.flatten() * self.VMax)
 
         return Q
 
