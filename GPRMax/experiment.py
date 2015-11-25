@@ -22,7 +22,7 @@ def make_experiment(
     opt["checks_per_policy"] = 2
 
     # the Horizon length
-    H = 5.0
+    H = 10.0
 
     # the discount factor
     gamma = 1.0 - (1.0/H)
@@ -42,7 +42,7 @@ def make_experiment(
     representation.discountFactor = gamma
 
     # instantiate the policy
-    policy = eGreedy(representation, epsilon=0)
+    policy = eGreedy(representation, epsilon=0.1)
     
     opt["agent"] = GPRMax(
         policy, representation, domain.actions_num, len(domain.state_names),
