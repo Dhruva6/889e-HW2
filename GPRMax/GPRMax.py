@@ -23,7 +23,7 @@ class GPRMax(DescentAlgorithm, Agent):
     tick = 0
 
     # the number of iterations to skip before training the GP's
-    trainEveryNSteps = 200
+    trainEveryNSteps = 500
 
     # the maximum length of the queue
     maxQLen = 25000
@@ -65,12 +65,15 @@ class GPRMax(DescentAlgorithm, Agent):
         # instantiate the histogram of actions seen so far
         self.actionHist = np.zeros(self.actionsDim)
 
-        # instantiate transitionLearners
-        self.kernel = GPy.kern.RBF(1, 5, 1)
-
+        # discount factor
         self.discountFactor = discount_factor
 
-        # the Q Dictionary
+        # the cache of states to process 
+        self.processStatesCache = []
+
+        self.VMax = 1e07
+        self.minVarToExplore = 1.0
+        
         
     def learn(self, s, p_actions, a, r, ns, np_actions, na, terminal):
 
@@ -105,6 +108,9 @@ class GPRMax(DescentAlgorithm, Agent):
             self.fullStatesCache = np.concatenate((self.fullStatesCache, np.atleast_2d(s)))
             self.qValCache = np.concatenate((self.qValCache, np.atleast_2d(qVal)))
 
+        # add the current example to be processed
+        self.processStatesCache.append(self.tick-1)
+        
         # have the transistion and reward models been updated this iteration
         modelUpdated = False
 
@@ -164,10 +170,11 @@ class GPRMax(DescentAlgorithm, Agent):
  
         if modelUpdated == True:
 
+            # the number of steps to roll out for computing the Q values
             numSteps = int(1.0/(1.0-self.discountFactor))
             
             # iterate through all the stored state and update their respective Q values
-            for ii in range(len(self.fullStatesCache)):
+            for ii in self.processStatesCache:
 
                 # instantiate the current state
                 currState = self.fullStatesCache[ii][:]
@@ -194,10 +201,14 @@ class GPRMax(DescentAlgorithm, Agent):
 
                         # predict the reward for the delta state ds[i]+s[i]
                         ns = np.atleast_2d(np.array(currState + (ds[:,aIdx]).T))
-                        yp = self.rewardLearners.predict(ns)[0]
+                        yp, yv = self.rewardLearners.predict(ns)
 
+                        var = yv.flatten()
+                        if var > self.minVarToExplore:
+                            var = 1.0
+                        
                         # update the cache
-                        self.qValCache[ii][aIdx] +=  gamma * yp.flatten()
+                        self.qValCache[ii][aIdx] += (1-var) * (gamma * yp.flatten()) + (var * self.VMax) 
 
                     # the next best action
                     nba = np.argmax(self.qValCache[ii])
@@ -207,11 +218,13 @@ class GPRMax(DescentAlgorithm, Agent):
 
                     # the next discount factor
                     gamma *= gamma
-                    
+
+            # clear out the states to process
+            self.processStatesCache = []
+            
             # pass along the cache, the learners
             self.representation.setCache(self.fullStatesCache, self.qValCache)
 
- 
         if terminal:
             # If THIS state is terminal:
             self.episodeTerminated()
