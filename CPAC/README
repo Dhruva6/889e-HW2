@@ -7,10 +7,11 @@ max-norm/Chebyshev distance) for computing the nearest neighbours. Unfortunately
 NearPy seems to be trying to call the distance metric passed in from its own
 internal 'nearpy.Distance' subdirectory. We aren't entirely sure why it is set up
 this way so we had to modify (hack) the implementation a bit to run correctly. 
+
 Our hack basically loads in Chebyshev Distance as a special distance metric in 
 NearPy so that it can access it through its subdirectory structure. 
 We tried a few approaches prior to this but ultimately just gave up and 
-implemented this hack. We have a script called 'nearpy_setup' implemented
+implemented this hack. We have a script called 'nearpy_setup.sh' implemented
 in this folder that just moves some python files to the Nearpy subdirectory
 (which should be in /Library/Python/2.7/site-packages/nearpy/distances). The
 script basically copies over an __init__.py file and another max_norm.py file

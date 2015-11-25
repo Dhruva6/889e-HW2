@@ -20,16 +20,17 @@ param_space = {'Rmax':hp.loguniform("Rmax", 5, 10),
 
 def make_experiment(
         exp_id=1, path="./Results/Temp/{domain}/{agent}/{representation}/",
-        Rmax=10**11, lipschitz_constant=10**3, epsilon_d=0.01, knn = 1):
+        Rmax=10**10, lipschitz_constant=10**3, epsilon_d=0.01, knn = 1):
     opt = {}
     opt["exp_id"] = exp_id
     opt["path"] = path
     #opt["max_steps"] = 150000
-    opt["max_steps"] = 60000
+    opt["max_steps"] = 8000
     #opt["num_policy_checks"] = 30
-    opt["num_policy_checks"] = 10
+    opt["num_policy_checks"] = 4
     opt["checks_per_policy"] = 2
     epsilon_d = 0.9
+    knn = 1
 
     domain = HIVTreatment()
     opt["domain"] = domain
@@ -48,7 +49,7 @@ if __name__ == '__main__':
     #from rlpy.Tools.run import run_profiled
     #run_profiled(make_experiment)
     #experiment = make_experiment(2, "./Results/try")
-    experiment = make_experiment(1)
-    experiment.run(visualize_learning=True, visualize_steps=False, visualize_performance=1)
+    experiment = make_experiment(4)
+    experiment.run(visualize_learning=False, visualize_steps=False, visualize_performance=1)
     experiment.plot()
     experiment.save()
