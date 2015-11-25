@@ -23,7 +23,7 @@ class GPRMax(DescentAlgorithm, Agent):
     tick = 0
 
     # the number of iterations to skip before training the GP's
-    trainEveryNSteps = 500
+    trainEveryNSteps = 200
 
     # the maximum length of the queue
     maxQLen = 25000
@@ -71,7 +71,7 @@ class GPRMax(DescentAlgorithm, Agent):
         # the cache of states to process 
         self.processStatesCache = []
 
-        self.VMax = 1e07
+        self.VMax = 1e09
         self.minVarToExplore = 1.0
         
         
