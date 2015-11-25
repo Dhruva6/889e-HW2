@@ -17,12 +17,12 @@ def make_experiment(
     opt = {}
     opt["exp_id"] = exp_id
     opt["path"] = path
-    opt["max_steps"] = 10000
-    opt["num_policy_checks"] = 10
-    opt["checks_per_policy"] = 1
+    opt["max_steps"] = 20000
+    opt["num_policy_checks"] = 20
+    opt["checks_per_policy"] = 2
 
     # the Horizon length
-    H = 1.0
+    H = 5.0
 
     # the discount factor
     gamma = 1.0 - (1.0/H)

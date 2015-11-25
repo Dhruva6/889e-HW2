@@ -4,6 +4,8 @@ from rlpy.Representations import Representation, IncrementalTabular
 import numpy as np
 from copy import deepcopy
 import math
+from sklearn.neighbors import KDTree
+
 
 __copyright__ = "Copyright 2013, RLPy http://acl.mit.edu/RLPy"
 __credits__ = ["Alborz Geramifard", "Robert H. Klein", "Christoph Dann",
@@ -45,6 +47,9 @@ class GPRMaxRepresentation(IncrementalTabular):
 
     # just consider a single step when predicting Q values
     singleStep = False
+
+    # is the cache valid
+    cacheValid = False
 
        
     def __init__(self, domain, discretization=20):
@@ -102,95 +107,28 @@ class GPRMaxRepresentation(IncrementalTabular):
     def featureType(self):
         return bool
 
-    def setLearners(self, transitionLearners, rewardLearners):
-        self.transitionLearners = transitionLearners
-        self.rewardLearners = rewardLearners
+    def setCache(self, fullStateCache, qValCache):
+        self.fullStatesCache = deepcopy(fullStateCache)
+        self.qValCache = deepcopy(qValCache)
+        self.cacheValid = True
 
-    def setCanUseLearners(self):
-        self.canUseLearners = True
-    
     def Qs(self, s, terminal, phi_s=None):
 
         # start off with Q being 0
         Q = np.zeros(self.domain.actions_num)
 
         # catch
-        if self.canUseLearners == False:
+        if self.cacheValid == False:
             return Q
 
-        # the reward 
-        ds = np.zeros(len(s))
+        # simple linear search
+        minIdx = 0
+        minDist = 1e9
+        for i in range(len(self.fullStatesCache)):
+            d = np.linalg.norm(np.subtract(self.fullStatesCache[i], np.array(s)))
+            if d < minDist:
+                minDist = d
+                minIdx = i
 
-        # iterate through all the actions
-        for aIdx in range(self.domain.actions_num):
-
-            actIdx = aIdx * len(s)
-
-            # predict the rewards for the next state
-            for i in range(len(s)):
-                yp = self.transitionLearners[actIdx+i].predict(np.ones((1,1))*s[i])[0]
-                ds[i] = yp.flatten()
-
-            # predict the reward for the delta state ds[i]+s[i]
-            ns = np.atleast_2d(np.array(s + ds))
-            yp = self.rewardLearners.predict(ns)[0]
-
-            Q[aIdx] = yp.flatten()
-
-        # if over-ridden to not go beyond the next step, silently return
-        if self.singleStep == True:
-            return Q
-    
-        # the predicted state transition delta
-        ds = np.zeros(len(s))
-
-        # the variance in the delta prediction 
-        dsVar = np.zeros(len(s))
-
-        # predicted variance score
-        predVarScore = np.zeros(self.domain.actions_num)
+        return self.qValCache[minIdx][:]
         
-        # the current state
-        currState = s
-
-        # the discount factor
-        gamma = self.discountFactor
-
-        # compute the number of steps
-        numSteps = int(math.floor(1/(1-gamma)))
-
-        for steps in range(numSteps):
-            
-            #
-            # choose the best action, find the next state
-            #
-            bestAction = np.argmax(Q)
- 
-            # the index into the transition learners to predict the next action
-            actIdx = bestAction * len(s)
-
-            # predict the transition for the current action from the current state
-            for i in range(len(s)):
-                yp = self.transitionLearners[actIdx+i].predict(np.ones((1,1)) * currState[i])[0]
-                ds[i] = yp.flatten()
-            
-            # the new state is the sum of the current state plus or transition
-            currState = currState + ds
-
-            # update the discount factor
-            gamma *= gamma
-            
-            # iterate through all the actions
-            for aIdx in range(self.domain.actions_num):
-
-                actIdx = aIdx * len(s)
-
-                # predict the reward for the delta state ds[i]+s[i]
-                yp, yVar = self.rewardLearners.predict(np.atleast_2d(np.array(currState)))
-
-                # update single step
-                Q[aIdx] = (1-yVar.flatten()) * (Q[aIdx] + gamma * yp.flatten()) + (yVar.flatten() * self.VMax)
-
-        return Q
-
-
